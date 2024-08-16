@@ -1,5 +1,6 @@
 const cloudinary = require("cloudinary").v2;
-const streamifier = require('streamifier');
+const streamifier = require("streamifier");
+require("dotenv").config();
 
 cloudinary.config({
   cloud_name: process.env.CLOUD_NAME,
@@ -10,7 +11,7 @@ cloudinary.config({
 exports.handleUpload = (buffer) => {
   return new Promise((resolve, reject) => {
     const stream = cloudinary.uploader.upload_stream(
-      { resource_type: 'auto', folder: 'blog_photos' },
+      { resource_type: "auto", folder: "blog_photos" },
       (error, result) => {
         if (error) {
           reject(error);
