@@ -3,11 +3,13 @@ const Comment = require("../models/commentModel");
 const catchError = require("../utils/catchError");
 const { handleUpload } = require("../utils/cloudinary");
 const mongoose = require("mongoose");
+const { ObjectId } = require("mongodb");
 const AppError = require("../utils/error");
 
 const addBlog = catchError(async (req, res) => {
   const { title, content } = req.body;
   const file = req.file;
+  console.log(file);
 
   if (!file) {
     throw new AppError(400, "Please upload a featured image.");
@@ -26,7 +28,7 @@ const addBlog = catchError(async (req, res) => {
     title: title,
     content: content,
     photo: photoUrl,
-    author: req.user
+    author: req.user,
   });
 
   const blogData = blog.populate("author", "-password");
@@ -40,7 +42,6 @@ const getBlogs = catchError(async (req, res) => {
   const blogs = await Blog.find({})
     .sort({ createdAt: -1 })
     .populate("author", "-password");
-
   return res.status(200).json(blogs);
 });
 
@@ -84,7 +85,8 @@ const getEditPost = catchError(async (req, res) => {
 
 const editPost = catchError(async (req, res) => {
   const { id } = req.params;
-  const { title, photo, content } = req.body;
+  const { title, content } = req.body;
+  const photo = req.file ? req.file.buffer : null;
 
   if (!id) {
     throw new AppError(400, "Post ID is required");
@@ -95,7 +97,11 @@ const editPost = catchError(async (req, res) => {
     return res.status(404).json({ message: "Post not found" });
   }
 
-  if (post.author !== req.user) {
+  if (!ObjectId.isValid(req.user) || !ObjectId.isValid(post.author)) {
+    return res.status(403).json({ message: "Invalid user or post author" });
+  }
+
+  if (!post.author.equals(new ObjectId(req.user))) {
     return res
       .status(403)
       .json({ message: "You are not authorized to edit this post" });
@@ -103,29 +109,34 @@ const editPost = catchError(async (req, res) => {
 
   let photoUrl = post.photo;
 
-  if (!photo) {
-    throw new AppError(400, "Please upload a featured image.");
+  try {
+    if (photo) {
+      // Use handleUpload for uploading the new photo
+      const photoResult = await handleUpload(photo);
+      photoUrl = photoResult.secure_url;
+    } else {
+      console.log("No new photo provided. Using existing photo.");
+    }
+
+    const updatedPost = await Blog.findByIdAndUpdate(
+      id,
+      {
+        title: title || post.title,
+        content: content || post.content,
+        photo: photo ? photoUrl : post.photo, // Update photo only if new photo is provided
+      },
+      { new: true, runValidators: true }
+    );
+
+    return res
+      .status(200)
+      .json({ message: "Post updated successfully", updatedPost });
+  } catch (error) {
+    console.error("Error in updating post:", error);
+    return res
+      .status(500)
+      .json({ message: "Internal Server Error", error: error.message });
   }
-
-  const photoResult = await cloudinary.uploader.upload(photo, {
-    folder: "blogPhotos",
-  });
-
-  photoUrl = photoResult.secure_url;
-
-  const updatedPost = await Blog.findByIdAndUpdate(
-    id,
-    {
-      title: title || post.title,
-      content: content || post.content,
-      photo: photoUrl,
-    },
-    { new: true, runValidators: true }
-  );
-
-  return res
-    .status(200)
-    .json({ message: "Post updated successfully", updatedPost });
 });
 
 const deletePost = catchError(async (req, res) => {
@@ -136,7 +147,6 @@ const deletePost = catchError(async (req, res) => {
   }
 
   const post = await Blog.findById(id);
-  console.log("Post Data:", post);
 
   if (!post) {
     return res.status(404).json({ message: "Post not found" });

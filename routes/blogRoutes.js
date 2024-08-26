@@ -17,7 +17,7 @@ router
   .route("/:id")
   .get(blogController.getSingleBlog)
   .get(blogController.getEditPost)
-  .put(authenticate, blogController.editPost)
+  .put(authenticate,upload.single('photo'), blogController.editPost)
   .delete(authenticate, blogController.deletePost);
 
 module.exports = router;

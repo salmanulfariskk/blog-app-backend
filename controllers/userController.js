@@ -7,6 +7,7 @@ const jwt = require("jsonwebtoken");
 
 const signup = catchError(async (req, res) => {
   const { name, email, password } = req.body;
+  
   const hashedPassword = await securePassword(password);
   const emailExist = await User.findOne({ email: email });
   if (emailExist) {
